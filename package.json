@@ -1,0 +1,17 @@
+{
+  "name": "pi-session-window",
+  "version": "0.1.0",
+  "description": "Clone or fork a Pi session into a new terminal window without replacing the current session",
+  "license": "MIT",
+  "repository": "https://github.com/x12315/pi-session-window",
+  "keywords": ["pi-package", "pi-extension", "session"],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": ["./extensions/session-window.ts"]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

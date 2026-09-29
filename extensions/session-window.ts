@@ -1,0 +1,178 @@
+import { spawn, execFile } from "node:child_process";
+import { constants, accessSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
+import { promisify } from "node:util";
+import { copyToClipboard, type ExtensionAPI, type ExtensionCommandContext, SessionManager } from "@earendil-works/pi-coding-agent";
+
+const run = promisify(execFile);
+
+function shellQuote(value: string): string {
+	return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function appleScriptQuote(value: string): string {
+	return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
+function executableOnPath(name: string): string | undefined {
+	for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+		if (!dir) continue;
+		const path = join(dir, name);
+		try {
+			accessSync(path, constants.X_OK);
+			return path;
+		} catch { /* try the next PATH entry */ }
+	}
+}
+
+async function openTerminal(launcher: string): Promise<void> {
+	const command = `/bin/sh ${shellQuote(launcher)}`;
+	if (process.platform === "darwin") {
+		const script = process.env.TERM_PROGRAM === "iTerm.app"
+			? `tell application "iTerm2" to create window with default profile command ${appleScriptQuote(command)}`
+			: `tell application "Terminal" to do script ${appleScriptQuote(command)}`;
+		await run("osascript", ["-e", script]);
+		return;
+	}
+	if (process.platform !== "linux") throw new Error("Only macOS and Linux terminals are supported");
+	if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("No graphical display is available");
+	const terminal = [
+		["x-terminal-emulator", ["-e", "/bin/sh", launcher]],
+		["gnome-terminal", ["--", "/bin/sh", launcher]],
+		["xterm", ["-e", "/bin/sh", launcher]],
+	] as const;
+	const selected = terminal.find(([name]) => executableOnPath(name));
+	if (!selected) throw new Error("No supported terminal found (x-terminal-emulator, gnome-terminal, xterm)");
+	await new Promise<void>((resolve, reject) => {
+		const child = spawn(selected[0], [...selected[1]], { detached: true, stdio: "ignore" });
+		child.once("error", reject);
+		child.once("spawn", () => { child.unref(); resolve(); });
+	});
+}
+
+async function openWindow(sessionFile: string, cwd: string): Promise<void> {
+	const piExecutable = executableOnPath("pi");
+	if (!piExecutable) throw new Error("pi is not on PATH");
+	const dir = mkdtempSync(join(tmpdir(), "pi-session-window-"));
+	const launcher = join(dir, "launch.sh");
+	try {
+		writeFileSync(launcher, `#!/bin/sh
+export PATH=${shellQuote(process.env.PATH ?? "")}
+rm -f "$0"
+rmdir ${shellQuote(dir)} 2>/dev/null
+if ! cd ${shellQuote(cwd)}; then
+  printf 'Could not open session directory.\\n'
+  exec ${shellQuote(process.env.SHELL || "/bin/sh")} -l
+fi
+${shellQuote(piExecutable)} --session ${shellQuote(sessionFile)}
+status=$?
+if [ "$status" -ne 0 ]; then
+  printf '\\nPi exited with status %s.\\n' "$status"
+  exec ${shellQuote(process.env.SHELL || "/bin/sh")} -l
+fi
+`, { mode: 0o600 });
+		await openTerminal(launcher);
+	} catch (error) {
+		rmSync(dir, { recursive: true, force: true });
+		throw error;
+	}
+}
+
+async function forkInWindow(ctx: ExtensionCommandContext, leafId: string, prompt?: string): Promise<void> {
+	if (!ctx.isIdle()) {
+		ctx.ui.notify("Wait for the current response to finish before opening a fork", "warning");
+		return;
+	}
+	const sourceFile = ctx.sessionManager.getSessionFile();
+	if (!sourceFile || !existsSync(sourceFile)) {
+		ctx.ui.notify("Wait for the first assistant response so the session is saved", "warning");
+		return;
+	}
+	try {
+		const branch = SessionManager.open(sourceFile, ctx.sessionManager.getSessionDir());
+		const forkedFile = branch.createBranchedSession(leafId);
+		if (!forkedFile || !existsSync(forkedFile)) {
+			ctx.ui.notify("This branch has no saved assistant response yet", "warning");
+			return;
+		}
+		try {
+			await openWindow(forkedFile, ctx.cwd);
+		} catch (error) {
+			ctx.ui.notify(`New window failed: ${String(error)}\nOpen manually: pi --session ${shellQuote(forkedFile)}`, "error");
+			return;
+		}
+		if (prompt) {
+			try {
+				await copyToClipboard(prompt);
+				ctx.ui.notify("Fork opened; selected prompt copied to clipboard. Paste it in the new window to edit.", "info");
+			} catch (error) {
+				ctx.ui.notify(`Fork opened, but could not copy the selected prompt: ${String(error)}`, "warning");
+			}
+		} else {
+			ctx.ui.notify("Clone opened in a new window; this session is unchanged.", "info");
+		}
+	} catch (error) {
+		ctx.ui.notify(`Could not fork session: ${String(error)}`, "error");
+	}
+}
+
+/** Register window-preserving alternatives to pi's built-in /clone and /fork commands. */
+export default function (pi: ExtensionAPI): void {
+	pi.registerCommand("clone-window", {
+		description: "Clone the current conversation into a new terminal window, preserving this session",
+		handler: async (_args, ctx) => {
+			if (ctx.mode !== "tui") {
+				ctx.ui.notify("/clone-window requires interactive mode", "warning");
+				return;
+			}
+			const leafId = ctx.sessionManager.getLeafId();
+			if (!leafId) {
+				ctx.ui.notify("Nothing to clone yet", "warning");
+				return;
+			}
+			await forkInWindow(ctx, leafId);
+		},
+	});
+
+	pi.registerCommand("fork-window", {
+		description: "Fork before a previous user message in a new window, preserving this session",
+		handler: async (_args, ctx) => {
+			if (ctx.mode !== "tui") {
+				ctx.ui.notify("/fork-window requires interactive mode", "warning");
+				return;
+			}
+			const messages = ctx.sessionManager.getEntries().filter(
+				(entry) => entry.type === "message" && entry.message.role === "user",
+			);
+			const choices = messages.map((entry) => {
+				const content = entry.message.content;
+				const text = typeof content === "string"
+					? content
+					: content.filter((part) => part.type === "text").map((part) => part.text).join("");
+				return {
+					entry,
+					text,
+					hasImages: typeof content !== "string" && content.some((part) => part.type === "image"),
+					label: `${text.replace(/\s+/g, " ").slice(0, 80)} [${entry.id}]`,
+				};
+			}).filter((choice) => choice.text);
+			if (!choices.length) {
+				ctx.ui.notify("No user messages to fork from", "warning");
+				return;
+			}
+			const selected = await ctx.ui.select("Fork before which user message?", choices.map((choice) => choice.label));
+			const choice = choices.find((item) => item.label === selected);
+			if (!choice) return;
+			if (choice.hasImages) {
+				ctx.ui.notify("Cannot copy image attachments into the new window's editor", "warning");
+				return;
+			}
+			if (!choice.entry.parentId) {
+				ctx.ui.notify("Cannot open a fork before the first message in a new window", "warning");
+				return;
+			}
+			await forkInWindow(ctx, choice.entry.parentId, choice.text);
+		},
+	});
+}
