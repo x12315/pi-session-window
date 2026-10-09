@@ -6,7 +6,8 @@
   "repository": "https://github.com/x12315/pi-session-window",
   "keywords": ["pi-package", "pi-extension", "session"],
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "pi": {
     "extensions": ["./extensions/session-window.ts"]

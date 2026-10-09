@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { copyToClipboard, type ExtensionAPI, type ExtensionCommandContext, SessionManager } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 
 const run = promisify(execFile);
 
@@ -161,8 +162,40 @@ export default function (pi: ExtensionAPI): void {
 				ctx.ui.notify("No user messages to fork from", "warning");
 				return;
 			}
-			const selected = await ctx.ui.select("Fork before which user message?", choices.map((choice) => choice.label));
-			const choice = choices.find((item) => item.label === selected);
+			const selected = await ctx.ui.custom<string | undefined>((tui, theme, keys, done) => {
+				let index = choices.length - 1;
+				const visibleCount = () => Math.max(1, Math.min(9, tui.terminal.rows - 3));
+				return {
+					render(width: number): string[] {
+						const count = visibleCount();
+						const start = Math.max(0, Math.min(index - Math.floor(count / 2), choices.length - count));
+						const end = Math.min(start + count, choices.length);
+						const lines: string[] = [];
+						if (tui.terminal.rows >= 3) lines.push(truncateToWidth(theme.bold("Fork in new window"), width));
+						if (tui.terminal.rows >= 4) lines.push(truncateToWidth(theme.fg("muted", "↑↓ navigate · PgUp/PgDn page · Enter select · Esc cancel"), width));
+						for (let i = start; i < end; i++) {
+							const active = i === index;
+							const prefix = active ? "› " : "  ";
+							const text = truncateToWidth(choices[i].label, Math.max(0, width - 2));
+							lines.push(truncateToWidth(active ? theme.fg("accent", `${prefix}${text}`) : `${prefix}${text}`, width));
+						}
+						if (tui.terminal.rows >= 2) lines.push(truncateToWidth(theme.fg("muted", `${index + 1}/${choices.length} · ${start > 0 ? "↑ more " : ""}${end < choices.length ? "↓ more" : ""}`), width));
+						return lines;
+					},
+					invalidate(): void {},
+					handleInput(data: string): void {
+						const page = visibleCount();
+						if (keys.matches(data, "tui.select.up")) index = Math.max(0, index - 1);
+						else if (keys.matches(data, "tui.select.down")) index = Math.min(choices.length - 1, index + 1);
+						else if (keys.matches(data, "tui.select.pageUp")) index = Math.max(0, index - page);
+						else if (keys.matches(data, "tui.select.pageDown")) index = Math.min(choices.length - 1, index + page);
+						else if (keys.matches(data, "tui.select.confirm")) return done(choices[index].entry.id);
+						else if (keys.matches(data, "tui.select.cancel")) return done(undefined);
+						tui.requestRender();
+					},
+				};
+			}, { overlay: true, overlayOptions: { anchor: "center", width: "100%", maxHeight: "100%" } });
+			const choice = choices.find((item) => item.entry.id === selected);
 			if (!choice) return;
 			if (choice.hasImages) {
 				ctx.ui.notify("Cannot copy image attachments into the new window's editor", "warning");

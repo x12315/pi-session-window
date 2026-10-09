@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+
+test("Window extension does not register automatic session cleanup", () => {
+	const source = readFileSync(join(root, "extensions/session-window.ts"), "utf8");
+	assert.doesNotMatch(source, /pi\.on\s*\(/, "No lifecycle handlers are registered");
+	assert.doesNotMatch(source, /cloneRecord|markClone|renameSync|\.recycled-session-window|\.pi-session-window-clones/);
+});
 
 test("Pi loads both window commands from the package", () => {
 	const agentDir = mkdtempSync(join(tmpdir(), "pi-session-window-test-"));

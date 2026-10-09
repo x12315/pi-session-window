@@ -17,6 +17,10 @@ Restart Pi or run `/reload`. The package works in interactive Pi sessions; it do
 
 The branch is a normal Pi session file. If opening the terminal fails, Pi displays the `pi --session '...'` command to resume it manually. Nothing is sent to a server by this extension.
 
+Sessions are managed manually: this extension never automatically deletes, moves, or recycles a session, including an unused clone. The experimental clone-recycling feature is shelved on `feat/unused-clone-recycling` and is not active here.
+
+Pi assigns each branch a unique session ID and filename, **not** a unique display name. `/resume` shows the explicit `/name` if it is on the copied branch; otherwise it shows the first user message, which may be the same for several branches. Use `/name` when you keep a branch.
+
 ## Terminals and limitations
 
 - macOS: iTerm2 when running inside iTerm2; otherwise Terminal.app.
