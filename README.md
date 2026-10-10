@@ -10,6 +10,8 @@ pi install git:github.com/x12315/pi-session-window@v0.1.0
 
 Restart Pi or run `/reload`. The package works in interactive Pi sessions; it does not override Pi's built-in `/clone`, `/fork`, or `/copy`.
 
+The `v0.1.0` tag is unchanged. The `pi-h` preference and native guest acceptance described below are currently on `feat/session-window`, not a new release; use a reviewed full commit from that branch when testing these changes.
+
 ## Use
 
 - `/clone-window` copies the current saved branch and resumes the copy in a new window. Your current session stays open.
@@ -33,8 +35,8 @@ Pi assigns each branch a unique session ID and filename, **not** a unique displa
 
 ## Development
 
-Requires Pi on `PATH`. `npm test` checks Pi command discovery and shell launcher selection, literal session arguments, fresh runtime isolation and native fallback without calling a model. It does not prove that a macOS/Linux GUI terminal opened. Try `pi -e .` to load the working tree without installing it.
+Requires Pi on `PATH`. `npm test` checks Pi command discovery, RPC rejection with a pre-model input guard, swapped-branch rejection, shell launcher selection, literal session arguments, fresh runtime isolation and native fallback without calling a model. It does not prove that a macOS/Linux GUI terminal opened. Try `pi -e .` to load the working tree without installing it.
 
-Guest integration cases and their exact scope are documented in [`tests/sandbox/README.md`](tests/sandbox/README.md). Native GUI acceptance requires a prepared Linux terminal/display or macOS Automation permission for the process controlling iTerm. The current Sandbox runs passed package/launcher checks but did not pass GUI clone/fork: Linux lacked terminal dependencies; macOS stopped at an unanswered guest Automation prompt. No permissions are granted by this package.
+Guest integration cases and their exact scope are documented in [`tests/sandbox/README.md`](tests/sandbox/README.md). They start a real parent Pi TUI inside the guest terminal and invoke clone/fork through keyboard input. Native GUI acceptance requires a prepared terminal/display and existing guest permissions; missing dependencies or an unanswered authorization dialog fail the case. The earlier RPC-launched synthetic-parent fixture did not prove this real-terminal flow. No permissions are granted by this package.
 
 MIT licensed; contributions and bug reports are welcome via GitHub issues and pull requests.

@@ -2,7 +2,11 @@ package.json:/tmp/ahsb-push/window/package.json
 extensions/session-window.ts:/tmp/ahsb-push/window/extensions/session-window.ts
 extensions/window-launcher.mjs:/tmp/ahsb-push/window/extensions/window-launcher.mjs
 test/package.test.mjs:/tmp/ahsb-push/window/test/package.test.mjs
+test/rpc-input-guard.ts:/tmp/ahsb-push/window/test/rpc-input-guard.ts
+test/fixture-verifier.test.mjs:/tmp/ahsb-push/window/test/fixture-verifier.test.mjs
 test/window-launcher.test.mjs:/tmp/ahsb-push/window/test/window-launcher.test.mjs
 tests/sandbox/window-common/guest.sh:/tmp/ahsb-push/window/guest.sh
-tests/sandbox/window-common/handler-fixture.ts:/tmp/ahsb-push/window/tests/sandbox/handler-fixture.ts
+tests/sandbox/window-common/parent-probe.ts:/tmp/ahsb-push/window/tests/sandbox/parent-probe.ts
+tests/sandbox/window-common/keyboard-parent.sh:/tmp/ahsb-push/window/keyboard-parent.sh
+tests/sandbox/window-common/verify.mjs:/tmp/ahsb-push/window/verify.mjs
 tests/sandbox/window-common/child-probe.ts:/tmp/ahsb-push/window/tests/sandbox/child-probe.ts

@@ -45,8 +45,6 @@ if [ "$platform" = Linux ]; then
         sleep 0.25
     done
     xwininfo -root >/dev/null || exit 42
-else
-    export TERM_PROGRAM=iTerm.app
 fi
 
 # This pi-h is ONLY a marker shim. It proves launcher selection/environment, not Harness behavior.
@@ -60,12 +58,13 @@ const marker = 'const fs=require("node:fs");fs.writeFileSync(process.env.WINDOW_
 fs.writeFileSync(path.join(root, 'bin/pi-h'), `#!/bin/sh\nexport WINDOW_ROOT=${quote(root)}\n${quote(process.execPath)} -e ${quote(marker)} -- "$@"\nexport PI_CODING_AGENT_DIR="$WINDOW_ROOT/child-runtime-$$"\nmkdir -p "$PI_CODING_AGENT_DIR"\nprintf '{"cacheWarming":"off"}\\n' > "$PI_CODING_AGENT_DIR/settings.json"\nunset ANTHROPIC_API_KEY OPENAI_API_KEY\nexec ${quote(process.env.WINDOW_REAL_PI)} --offline --no-extensions --no-skills --no-prompt-templates --no-themes --no-context-files -e /tmp/ahsb-push/window/tests/sandbox/child-probe.ts "$@"\n`, {mode: 0o755});
 NODE
 export PATH="$WINDOW_ROOT/bin:$PATH"
-printf '{"type":"get_commands"}\n' | "$real_pi" --offline --mode rpc --no-extensions --no-skills --no-prompt-templates --no-themes --no-context-files -e /tmp/ahsb-push/window/tests/sandbox/handler-fixture.ts > "$WINDOW_ROOT/handler.out" 2> "$WINDOW_ROOT/handler.err"
-node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.env.WINDOW_ROOT+"/result.json"));if(!r.pass){console.error(r);process.exit(1)}'
+export WINDOW_REAL_PI="$real_pi"
+bash /tmp/ahsb-push/window/keyboard-parent.sh
+node /tmp/ahsb-push/window/verify.mjs
 if [ "$platform" = Linux ]; then
     xwininfo -root -tree > "$WINDOW_ROOT/windows.txt"
     grep -i xterm "$WINDOW_ROOT/windows.txt"
-    [ "$(grep -ic '"XTerm"' "$WINDOW_ROOT/windows.txt")" -ge 2 ]
+    [ "$(grep -ic '"XTerm"' "$WINDOW_ROOT/windows.txt")" -ge 3 ]
     if command -v import >/dev/null; then import -window root /tmp/ah-artifacts/window/gui.png; fi
     printf 'guestTerminalWindows=PASS (X11 tree, guest Xvfb)\n'
 else
@@ -74,9 +73,10 @@ ObjC.import('CoreGraphics');
 ObjC.import('Foundation');
 const windows = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1, 0)));
 const terminals = windows.filter(w => ['iTerm2', 'iTerm'].includes(w.kCGWindowOwnerName) && w.kCGWindowLayer === 0 && w.kCGWindowAlpha > 0 && w.kCGWindowBounds.Width > 0);
-if (terminals.length < 2) throw Error('two visible guest iTerm windows required');
+if (terminals.length < 3) throw Error('parent plus two visible guest iTerm windows required');
 JSON.stringify(terminals);
 JXA
-    printf 'guestTerminalWindows=PASS (CoreGraphics, guest iTerm)\n'
+    node -e 'const fs=require("node:fs");const r=process.env.WINDOW_ROOT;const before=JSON.parse(fs.readFileSync(r+"/windows-before.json"));const after=JSON.parse(fs.readFileSync(r+"/windows.json"));if(after.filter(w=>!before.includes(w.kCGWindowNumber)).length!==2||!before.every(id=>after.some(w=>w.kCGWindowNumber===id)))throw Error("two new native windows and preserved parent required")'
+    printf 'guestTerminalWindows=PASS (CoreGraphics, two new guest iTerm windows, parent preserved)\n'
 fi
-printf 'windowHandlers=PASS scope=handler-ui-fixture/native-child-tui/pi-h-marker-not-Harness\n'
+printf 'windowKeyboard=PASS scope=real-parent-tui/native-child-tui/pi-h-marker-not-Harness\n'

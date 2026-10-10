@@ -65,6 +65,10 @@ fi
 	}
 }
 
+function isInteractive(ctx: ExtensionCommandContext): boolean {
+	return ctx.mode === "tui" || (ctx.mode === undefined && ctx.hasUI && process.stdin.isTTY === true && process.stdout.isTTY === true);
+}
+
 async function forkInWindow(ctx: ExtensionCommandContext, leafId: string, prompt?: string): Promise<void> {
 	if (!ctx.isIdle()) {
 		ctx.ui.notify("Wait for the current response to finish before opening a fork", "warning");
@@ -108,7 +112,7 @@ export default function (pi: ExtensionAPI): void {
 	pi.registerCommand("clone-window", {
 		description: "Clone the current conversation into a new terminal window, preserving this session",
 		handler: async (_args, ctx) => {
-			if (ctx.mode !== "tui") {
+			if (!isInteractive(ctx)) {
 				ctx.ui.notify("/clone-window requires interactive mode", "warning");
 				return;
 			}
@@ -124,7 +128,7 @@ export default function (pi: ExtensionAPI): void {
 	pi.registerCommand("fork-window", {
 		description: "Fork before a previous user message in a new window, preserving this session",
 		handler: async (_args, ctx) => {
-			if (ctx.mode !== "tui") {
+			if (!isInteractive(ctx)) {
 				ctx.ui.notify("/fork-window requires interactive mode", "warning");
 				return;
 			}
