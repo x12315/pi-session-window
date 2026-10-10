@@ -15,7 +15,9 @@ Restart Pi or run `/reload`. The package works in interactive Pi sessions; it do
 - `/clone-window` copies the current saved branch and resumes the copy in a new window. Your current session stays open.
 - `/fork-window` selects a previous user message, opens a branch just before it, and copies that message to your clipboard. Paste it into the new window to edit or resend it.
 
-The branch is a normal Pi session file. If opening the terminal fails, Pi displays the `pi --session '...'` command to resume it manually. Nothing is sent to a server by this extension.
+The branch is a normal Pi session file. New windows prefer `pi-h --session '...'` when Harness is installed; otherwise they use native `pi --session '...'`. A failing installed `pi-h` is not silently retried as native Pi. If opening the terminal fails, Pi displays the matching manual resume command. Nothing is sent to a server by this extension.
+
+`pi-h` starts switch-ready **ordinary mode**, not the parent's heavy/medium/ultralight Profile. Conversation cloning does not clone Profile configuration. Ordinary mode keeps native resources and global rules, loads the `/harness` management entry, and lets you choose a work Profile with `/harness switch`. The launch clears only the child's inherited `PI_CODING_AGENT_DIR` and preserves an explicitly selected `HARNESS_CATALOG`; it does not change the parent session, trust, model defaults or settings.
 
 Sessions are managed manually: this extension never automatically deletes, moves, or recycles a session, including an unused clone. The experimental clone-recycling feature is shelved on `feat/unused-clone-recycling` and is not active here.
 
@@ -31,6 +33,8 @@ Pi assigns each branch a unique session ID and filename, **not** a unique displa
 
 ## Development
 
-Requires Pi on `PATH`. `npm test` checks that Pi can load the package and discover both commands without calling a model. Try `pi -e .` to load the working tree without installing it.
+Requires Pi on `PATH`. `npm test` checks Pi command discovery and shell launcher selection, literal session arguments, fresh runtime isolation and native fallback without calling a model. It does not prove that a macOS/Linux GUI terminal opened. Try `pi -e .` to load the working tree without installing it.
+
+Guest integration cases and their exact scope are documented in [`tests/sandbox/README.md`](tests/sandbox/README.md). Native GUI acceptance requires a prepared Linux terminal/display or macOS Automation permission for the process controlling iTerm. The current Sandbox runs passed package/launcher checks but did not pass GUI clone/fork: Linux lacked terminal dependencies; macOS stopped at an unanswered guest Automation prompt. No permissions are granted by this package.
 
 MIT licensed; contributions and bug reports are welcome via GitHub issues and pull requests.

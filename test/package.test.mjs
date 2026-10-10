@@ -14,6 +14,12 @@ test("Window extension does not register automatic session cleanup", () => {
 	assert.doesNotMatch(source, /cloneRecord|markClone|renameSync|\.recycled-session-window|\.pi-session-window-clones/);
 });
 
+test("macOS uses the stable iTerm bundle ID and preserves native Terminal selection", () => {
+	const source = readFileSync(join(root, "extensions/session-window.ts"), "utf8");
+	assert.match(source, /process\.env\.TERM_PROGRAM === "iTerm\.app"\s*\? `tell application id "com\.googlecode\.iterm2" to create window with default profile command \$\{appleScriptQuote\(command\)\}`\s*:\s*`tell application "Terminal" to do script \$\{appleScriptQuote\(command\)\}`/);
+	assert.doesNotMatch(source, /tell application "iTerm2?"/);
+});
+
 test("Pi loads both window commands from the package", () => {
 	const agentDir = mkdtempSync(join(tmpdir(), "pi-session-window-test-"));
 	try {

@@ -1,37 +1,23 @@
 import { spawn, execFile } from "node:child_process";
-import { constants, accessSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
+import { executableOnPath, shellQuote, windowResumeCommand } from "./window-launcher.mjs";
 import { promisify } from "node:util";
 import { copyToClipboard, type ExtensionAPI, type ExtensionCommandContext, SessionManager } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 
 const run = promisify(execFile);
 
-function shellQuote(value: string): string {
-	return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 function appleScriptQuote(value: string): string {
 	return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-}
-
-function executableOnPath(name: string): string | undefined {
-	for (const dir of (process.env.PATH ?? "").split(delimiter)) {
-		if (!dir) continue;
-		const path = join(dir, name);
-		try {
-			accessSync(path, constants.X_OK);
-			return path;
-		} catch { /* try the next PATH entry */ }
-	}
 }
 
 async function openTerminal(launcher: string): Promise<void> {
 	const command = `/bin/sh ${shellQuote(launcher)}`;
 	if (process.platform === "darwin") {
 		const script = process.env.TERM_PROGRAM === "iTerm.app"
-			? `tell application "iTerm2" to create window with default profile command ${appleScriptQuote(command)}`
+			? `tell application id "com.googlecode.iterm2" to create window with default profile command ${appleScriptQuote(command)}`
 			: `tell application "Terminal" to do script ${appleScriptQuote(command)}`;
 		await run("osascript", ["-e", script]);
 		return;
@@ -53,8 +39,7 @@ async function openTerminal(launcher: string): Promise<void> {
 }
 
 async function openWindow(sessionFile: string, cwd: string): Promise<void> {
-	const piExecutable = executableOnPath("pi");
-	if (!piExecutable) throw new Error("pi is not on PATH");
+	if (!executableOnPath("pi-h") && !executableOnPath("pi")) throw new Error("Neither pi-h nor pi is on PATH");
 	const dir = mkdtempSync(join(tmpdir(), "pi-session-window-"));
 	const launcher = join(dir, "launch.sh");
 	try {
@@ -66,7 +51,7 @@ if ! cd ${shellQuote(cwd)}; then
   printf 'Could not open session directory.\\n'
   exec ${shellQuote(process.env.SHELL || "/bin/sh")} -l
 fi
-${shellQuote(piExecutable)} --session ${shellQuote(sessionFile)}
+${windowResumeCommand(sessionFile)}
 status=$?
 if [ "$status" -ne 0 ]; then
   printf '\\nPi exited with status %s.\\n' "$status"
@@ -100,7 +85,7 @@ async function forkInWindow(ctx: ExtensionCommandContext, leafId: string, prompt
 		try {
 			await openWindow(forkedFile, ctx.cwd);
 		} catch (error) {
-			ctx.ui.notify(`New window failed: ${String(error)}\nOpen manually: pi --session ${shellQuote(forkedFile)}`, "error");
+			ctx.ui.notify(`New window failed: ${String(error)}\nOpen manually: ${windowResumeCommand(forkedFile)}`, "error");
 			return;
 		}
 		if (prompt) {
