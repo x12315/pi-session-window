@@ -1,0 +1,11 @@
+# Busy clone keyboard regression
+
+Run `node tests/busy-clone/run.mjs` from the package root. Requires Pi 1.1.0+, Node.js and tmux on PATH. Missing dependencies fail rather than skip; this case is separate from `npm test` because it needs tmux.
+
+The runner starts real parent and child Pi TUI processes in private tmux sessions. A standard OpenAI-compatible endpoint bound only to loopback supplies deterministic streaming text and a tool call. The blocking tool is held until the child has accepted an independent task. No external model or credentials are used; isolated HOME and agent directories contain only fixture configuration. The loopback endpoint bypasses inherited proxy settings only inside these fixture processes.
+
+The extension receives literal `/clone-window` input while the parent is genuinely busy. Assertions require distinct parent/child processes, unchanged parent bytes at clone time, saved-only child context, no orphan tool call, no accidental ordinary input, cleared child runtime isolation, a new child task response, and continued parent execution through normal completion. Both streaming and long-tool cases must pass.
+
+The terminal launcher is replaced by a tmux-backed fixture, and the `pi-h` shim executes native Pi with fixture configuration. This validates the real busy command path and child continuation, not real Harness startup, filesystem isolation, native iTerm/Linux GUI windows, trust dialogs, clipboard behavior, or copying an in-flight response. Existing `tests/sandbox/` cases cover native window launches separately; they have not been extended here to exercise busy streaming.
+
+Each wait has a 12-second checkpoint and the blocking tool has a 20-second budget. On failure, the private fixture directory and a failure report are retained. On success, its tmux server and files are removed. Every run shuts down only its own processes and loopback server.

@@ -1,8 +1,9 @@
 import { spawn, execFile } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { executableOnPath, shellQuote, windowResumeCommand } from "./window-launcher.mjs";
+import { latestCompleteEntry } from "./session-snapshot.mjs";
 import { promisify } from "node:util";
 import { copyToClipboard, type ExtensionAPI, type ExtensionCommandContext, SessionManager } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
@@ -70,7 +71,8 @@ function isInteractive(ctx: ExtensionCommandContext): boolean {
 }
 
 async function forkInWindow(ctx: ExtensionCommandContext, leafId: string, prompt?: string): Promise<void> {
-	if (!ctx.isIdle()) {
+	const busy = !ctx.isIdle();
+	if (busy && prompt !== undefined) {
 		ctx.ui.notify("Wait for the current response to finish before opening a fork", "warning");
 		return;
 	}
@@ -80,12 +82,22 @@ async function forkInWindow(ctx: ExtensionCommandContext, leafId: string, prompt
 		return;
 	}
 	try {
-		const branch = SessionManager.open(sourceFile, ctx.sessionManager.getSessionDir());
+		const branch = SessionManager.open(realpathSync(sourceFile), realpathSync(ctx.sessionManager.getSessionDir()));
+		if (busy) {
+			const savedLeaf = ctx.sessionManager.getBranch(leafId).findLast((entry) => branch.getEntry(entry.id));
+			const snapshot = savedLeaf && latestCompleteEntry(branch.getBranch(savedLeaf.id));
+			if (!snapshot) {
+				ctx.ui.notify("No complete saved context to clone yet", "warning");
+				return;
+			}
+			leafId = snapshot.id;
+		}
 		const forkedFile = branch.createBranchedSession(leafId);
 		if (!forkedFile || !existsSync(forkedFile)) {
 			ctx.ui.notify("This branch has no saved assistant response yet", "warning");
 			return;
 		}
+		if (busy) ctx.ui.notify(`Clone saved through entry ${leafId}; unfinished output and tool calls are excluded. Parent task continues.`, "info");
 		try {
 			await openWindow(forkedFile, ctx.cwd);
 		} catch (error) {
@@ -110,7 +122,7 @@ async function forkInWindow(ctx: ExtensionCommandContext, leafId: string, prompt
 /** Register window-preserving alternatives to pi's built-in /clone and /fork commands. */
 export default function (pi: ExtensionAPI): void {
 	pi.registerCommand("clone-window", {
-		description: "Clone the current conversation into a new terminal window, preserving this session",
+		description: "Clone saved context into a new window without stopping the current task",
 		handler: async (_args, ctx) => {
 			if (!isInteractive(ctx)) {
 				ctx.ui.notify("/clone-window requires interactive mode", "warning");

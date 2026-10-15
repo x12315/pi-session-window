@@ -3,8 +3,9 @@
 Consumer-owned cases for `agent-harness-sandbox` commit
 `3bde2b75f20c7a033f71dd4cb31ee03e51c8026f` (unreleased interface).
 The previous `afd0c8a` image recipe did not include the native xterm requirement.
-All commands/apps run inside fresh disposable guests. No downloads, model prompts,
-permission grants, native preference edits, host GUI or base image changes.
+All commands/apps run inside fresh disposable guests. The idle cases below make no
+downloads, model prompts, permission grants, native preference edits, host GUI or
+base image changes. Busy-case differences are listed separately below.
 
 ```sh
 # Linux host: select a prepared Xvfb/xterm/xwininfo/tmux image and matching checkout.
@@ -86,3 +87,34 @@ selected user message is unverified. `pi-h` is a marker shim here, not real Harn
 Evidence: macOS `run-native-transport`, Linux `20261010T063148Z-Dio8q1`;
 local archive `.window-sandbox-alignment-rywTGR/` (not distributed with the package).
 Earlier failed runs are retained.
+
+## Busy clone acceptance
+
+`window-busy-macos` and `window-busy-linux` use the same `bin/test.sh --project`
+interface. They require the producer's prepared **Pi 0.87.1** runtime; macOS needs
+its runtime-prepared GUI base, Linux the native-terminal image. Missing runtime
+returns `NOT_READY`/78; these cases do not install or upgrade tools.
+
+The loopback mock model holds an unfinished response, then a bounded tool call.
+For each stage the real parent receives `/clone-window`, the native child completes
+`child task`, and only then is the parent released. Assertions require three distinct
+real TUI PIDs, unchanged parent bytes during cloning, permanent parent linkage,
+excluded unfinished output/tool calls, child saving and parent completion without
+cancellation. Native iTerm/CoreGraphics or mapped XTerm windows and guest screenshots
+are required. macOS uses clipboard/keyboard input; Linux uses real attached terminal
+PTYs, not a terminal-launcher replacement. The marker `pi-h` executes installed Pi;
+actual Harness ordinary/Profile switching is **not** covered.
+
+Budgets: each state wait 30 seconds, held tool 60 seconds, macOS command 180 seconds,
+outer lifecycle 300 seconds (600 maximum supervisor budget). Inspect progress at
+90 seconds. Requests use only the fixture's local model, not an external provider;
+Tart NAT is not called an air gap. Only the known non-security iTerm **Tips of the
+Day** prompt may be dismissed in the disposable clone; its UI choice never changes
+the original base or host preferences. Permission/security dialogs are never approved.
+
+Read the JSON `NATIVE_BUSY_CLONE_PASS` and `NATIVE_EVIDENCE` lines, native runtime
+report, injection hashes, exit codes and screenshots. Linux collects
+`guest/tmp/ah-artifacts/native-busy/{gui.png,parent-screen.txt}`; Tart collects
+`gui.png`. Linux windows may overlap without a window manager; the X11 mapping
+checks accompany the actual framebuffer screenshot. A streaming/tool marker alone
+is not acceptance: the final assertion and runner must both exit zero.
