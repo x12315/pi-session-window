@@ -56,8 +56,8 @@ ${windowResumeCommand(sessionFile)}
 status=$?
 if [ "$status" -ne 0 ]; then
   printf '\\nPi exited with status %s.\\n' "$status"
-  exec ${shellQuote(process.env.SHELL || "/bin/sh")} -l
 fi
+exec ${shellQuote(process.env.SHELL || "/bin/sh")} -l
 `, { mode: 0o600 });
 		await openTerminal(launcher);
 	} catch (error) {

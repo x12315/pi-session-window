@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import { shellQuote, windowResumeCommand } from "../extensions/window-launcher.mjs";
 
 function fixture(action) {
@@ -47,3 +48,38 @@ test("Missing entrypoints still produce a literal recoverable session command", 
 	const command = windowResumeCommand("/session with spaces.jsonl", { PATH: "/nonexistent" });
 	assert.equal(command, "env -u PI_CODING_AGENT_DIR 'pi-h' --session '/session with spaces.jsonl'");
 });
+
+for (const scenario of [
+	{ name: "normal Pi exit", code: 0 },
+	{ name: "failed Pi exit", code: 7 },
+	{ name: "interrupted Pi exit", code: 130 },
+	{ name: "missing working directory", missingCwd: true },
+]) {
+	test(`Window launcher hands off to a login shell after ${scenario.name}`, () => fixture(({ root, bin, env }) => {
+		const source = readFileSync(new URL("../extensions/session-window.ts", import.meta.url), "utf8");
+		const template = source.match(/writeFileSync\(launcher, (`[\s\S]*?`), \{ mode: 0o600 \}\)/)?.[1];
+		assert.ok(template, "Exercise the actual extension launcher template");
+		const dir = join(root, "launcher"); mkdirSync(dir);
+		const cwd = join(root, "project's directory");
+		if (!scenario.missingCwd) mkdirSync(cwd);
+		const shell = join(bin, "user's shell");
+		const shellOutput = 'console.log("SHELL_READY "+JSON.stringify({args:process.argv.slice(1),cwd:process.cwd()}))';
+		writeFileSync(shell, `#!/bin/sh\nexec ${shellQuote(process.execPath)} -e ${shellQuote(shellOutput)} -- "$@"\n`, { mode: 0o755 });
+		writeFileSync(join(bin, "pi-h"), `#!/bin/sh\nexit ${scenario.code ?? 0}\n`, { mode: 0o755 });
+		const launcherEnv = { ...env, SHELL: shell };
+		const script = runInNewContext(template, {
+			process: { env: launcherEnv }, dir, cwd, sessionFile: "/sessions/branch.jsonl",
+			shellQuote, windowResumeCommand: (file) => windowResumeCommand(file, launcherEnv),
+		});
+		const launcher = join(dir, "launch.sh"); writeFileSync(launcher, script);
+		const result = spawnSync("/bin/sh", [launcher], { env: launcherEnv, cwd: root, encoding: "utf8", timeout: 5000 });
+		assert.equal(result.status, 0, result.stderr);
+		const ready = result.stdout.split("\n").find(line => line.startsWith("SHELL_READY "));
+		assert.ok(ready, `No shell after ${scenario.name}: ${result.stdout}`);
+		assert.deepEqual(JSON.parse(ready.slice("SHELL_READY ".length)), { args: ["-l"], cwd: realpathSync(scenario.missingCwd ? root : cwd) });
+		if (scenario.code) assert.match(result.stdout, new RegExp(`Pi exited with status ${scenario.code}\\.`));
+		else assert.doesNotMatch(result.stdout, /Pi exited with status/);
+		if (scenario.missingCwd) assert.match(result.stdout, /Could not open session directory/);
+		assert.equal(existsSync(dir), false, "Temporary launcher directory is removed");
+	}));
+}
