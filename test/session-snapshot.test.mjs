@@ -45,3 +45,23 @@ test("Malformed or duplicate tool-call IDs cannot become complete snapshots", ()
 test("Unknown tool results do not produce invalid child transcripts", () => {
 	assert.equal(latestCompleteEntry([user, result("unknown"), { id: "later", type: "model_change" }]), user);
 });
+
+for (const stopReason of ["aborted", "error"]) {
+	test(`Historical ${stopReason} replies do not rewind later saved turns`, () => {
+		const failed = { ...call, id: "failed", message: { ...call.message, stopReason } };
+		const nextUser = { ...user, id: "latest-user" };
+		const completed = { id: "latest-reply", type: "message", message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "latest complete reply" }] } };
+		const history = [user, failed, nextUser, completed];
+		assert.equal(latestCompleteEntry(history), completed);
+		const activeCall = { ...call, id: "active-call", message: { ...call.message, stopReason: "toolUse" } };
+		assert.equal(latestCompleteEntry([...history, activeCall, result("one")]), completed);
+		const finalResult = result("two");
+		assert.equal(latestCompleteEntry([...history, activeCall, result("one"), finalResult]), finalResult);
+	});
+}
+
+test("Discarded malformed calls in failed replies do not poison later snapshots", () => {
+	const failed = { ...call, message: { role: "assistant", stopReason: "aborted", content: [{ type: "toolCall" }, { type: "toolCall", id: "one" }, { type: "toolCall", id: "one" }] } };
+	const latest = { ...user, id: "latest-user" };
+	assert.equal(latestCompleteEntry([user, failed, latest]), latest);
+});

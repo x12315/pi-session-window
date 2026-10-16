@@ -14,7 +14,7 @@ The `v0.1.0` tag is unchanged. The `pi-h` preference and native guest acceptance
 
 ## Use
 
-- `/clone-window` copies the current saved branch and resumes the copy in a new window. Your current session stays open. While the agent is working, cloning is immediate and the parent task continues: the snapshot ends at the latest saved entry with all tool-call results present. Unfinished streaming output, queued input, and an incomplete tool batch are not copied; the notification identifies the copied entry.
+- `/clone-window` copies the current saved branch and resumes the copy in a new window. Your current session stays open. While the agent is working, cloning is immediate and the parent task continues: the snapshot ends at the latest saved entry with all tool-call results present. Unfinished streaming output, queued input, and an incomplete tool batch are not copied; the notification identifies the copied entry. Historical aborted/errored replies do not count as running tool batches, so they cannot rewind a clone past later saved messages.
 - `/fork-window` selects a previous user message, opens a branch just before it, and copies that message to your clipboard. Paste it into the new window to edit or resend it.
 
 The branch is a normal Pi session file. New windows prefer `pi-h --session '...'` when Harness is installed; otherwise they use native `pi --session '...'`. A failing installed `pi-h` is not silently retried as native Pi. If opening the terminal fails, Pi displays the matching manual resume command. Nothing is sent to a server by this extension.
