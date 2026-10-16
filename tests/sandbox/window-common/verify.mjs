@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const root = process.env.WINDOW_ROOT;
 const read = name => JSON.parse(readFileSync(join(root, name), 'utf8'));
@@ -30,7 +30,7 @@ assert.equal(new Set([parent.pid, ...children.map(child => child.pid)]).size, 3)
 for (const child of children) {
     assert.equal(child.cwd, seed.cwd);
     assert.notEqual(child.file, seed.file);
-    assert.equal(child.parentSession, seed.file);
+    assert.equal(child.parentSession, realpathSync(seed.file));
     assert.deepEqual(child.texts, ['fixture first user', 'fixture first assistant', 'fixture second user', 'fixture second assistant'].slice(0, child.texts.length));
     if (process.platform === 'darwin') assert.equal(child.termProgram, 'iTerm.app');
     const marker = read(`marker-${child.pid}.json`);

@@ -1,0 +1,1 @@
+bash -c 'source /tmp/ahsb-push/window/guest.sh; node /tmp/ahsb-push/window/tests/sandbox/window-common/quit-macos.mjs'

@@ -34,7 +34,12 @@ on run argv
                 end if
                 delay 0.25
             end repeat
-            tell process "iTerm2" to set beforeCount to count windows
+            tell process "iTerm2"
+                if exists button "No" of window 1 then
+                    if (value of every static text of window 1) contains "See Tips of the Day?" then click button "No" of window 1
+                end if
+                set beforeCount to count windows
+            end tell
             keystroke "n" using command down
             repeat 40 times
                 tell process "iTerm2"

@@ -69,6 +69,28 @@ stdout because Tart has no generic attachment-download contract. Earlier Node
 passes alone are **not** a GUI integration pass. Test outcomes and remaining platform
 scope must be reported from the actual run artifacts, not inferred from the fixture.
 
+## Quit-to-shell regression (macOS)
+
+`window-quit-macos` reuses the real parent/clone/fork fixture, then types `/quit`
+into each child through guest clipboard and keyboard input. Each child Pi must
+exit while every original CoreGraphics iTerm window ID remains present. A command
+typed into each resulting ordinary shell must record its shell process, TTYs and
+iTerm identity. The final guest screenshot must show the shell marker.
+
+After loading the private Tart profile, select a prepared runtime base satisfying
+`requires.json`, then run:
+
+```sh
+EXECUTION=local CASE_TIMEOUT=180 /path/to/agent-harness-sandbox/bin/test.sh \\
+  --project "$PWD" window-quit-macos
+```
+
+Inspect `NATIVE_QUIT_PASS`, `runtime.json`, `project-source.sha256`, guest exit code,
+`assert.txt` and `gui.png` in the reported run directory. Only the exact non-security
+“See Tips of the Day?” prompt may be dismissed inside the disposable guest; security
+dialogs are not approved. This case covers macOS iTerm, not Linux GUI or the real
+Harness Profile launch chain (`pi-h` remains a marker shim).
+
 ## Verified scope (2026-10-10)
 
 Both guest platforms passed all nine tests and the real-parent/real-child TUI
