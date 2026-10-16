@@ -95,12 +95,17 @@ interface. They require the producer's prepared **Pi 0.87.1** runtime; macOS nee
 its runtime-prepared GUI base, Linux the native-terminal image. Missing runtime
 returns `NOT_READY`/78; these cases do not install or upgrade tools.
 
-The loopback mock model holds an unfinished response, then a bounded tool call.
+The seed includes aborted and errored assistant replies with partial tool calls,
+a compaction, then two later completed checkpoints. The loopback mock model holds
+an unfinished response, then a bounded tool call.
 For each stage the real parent receives `/clone-window`, the native child completes
 `child task`, and only then is the parent released. Assertions require three distinct
 real TUI PIDs, unchanged parent bytes during cloning, permanent parent linkage,
 excluded unfinished output/tool calls, child saving and parent completion without
-cancellation. Native iTerm/CoreGraphics or mapped XTerm windows and guest screenshots
+cancellation. The entire copied parent prefix must equal the expected entries by ID
+and content, with `copiedLeaf === expectedLeaf`; simply opening a child is not enough.
+Historical partial calls in aborted/errored replies must not rewind that leaf.
+Native iTerm/CoreGraphics or mapped XTerm windows and guest screenshots
 are required. macOS uses clipboard/keyboard input; Linux uses real attached terminal
 PTYs, not a terminal-launcher replacement. The marker `pi-h` executes installed Pi;
 actual Harness ordinary/Profile switching is **not** covered.

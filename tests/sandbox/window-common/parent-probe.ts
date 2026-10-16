@@ -14,6 +14,20 @@ export default function (pi: ExtensionAPI) {
 				manager.appendMessage({ role: "user", content: `${text} user`, timestamp: Date.now() });
 				manager.appendMessage({ role: "assistant", content: [{ type: "text", text: `${text} assistant` }], api: "anthropic-messages", provider: "anthropic", model: "fixture-no-request", stopReason: "stop", timestamp: Date.now(), usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
 			}
+			if (process.env.WINDOW_SNAPSHOT_HISTORY === "1") {
+				const last = manager.getLeafEntry();
+				if (last?.type !== "message" || last.message.role !== "assistant") throw new Error("Seed assistant template missing");
+				const template = last.message;
+				for (const stopReason of ["aborted", "error"] as const) {
+					manager.appendMessage({ role: "user", content: `historical ${stopReason} task`, timestamp: Date.now() });
+					manager.appendMessage({ ...template, stopReason, errorMessage: `fixture ${stopReason}`, content: [{ type: "toolCall", id: `historical_${stopReason}`, name: "window_test_wait", arguments: {} }] });
+				}
+				manager.appendCompaction("Fixture summary before the latest completed turns", manager.getLeafId()!, 10000);
+				for (const checkpoint of ["LATEST_SAVED_ONE", "LATEST_SAVED_TWO"]) {
+					manager.appendMessage({ role: "user", content: `${checkpoint} user`, timestamp: Date.now() });
+					manager.appendMessage({ ...template, content: [{ type: "text", text: `${checkpoint} assistant` }], timestamp: Date.now() });
+				}
+			}
 			const file = manager.getSessionFile()!;
 			writeFileSync(join(root, "seed.json"), JSON.stringify({ file, cwd, leaf: manager.getLeafId(), bytes: readFileSync(file, "utf8") }));
 			ctx.shutdown();

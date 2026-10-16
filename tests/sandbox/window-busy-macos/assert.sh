@@ -15,7 +15,11 @@ assert.equal(result.nativeWindows,3);
 assert.equal(result.mockRequests,2);
 assert.equal(result.cases.length,2);
 assert.equal(new Set(result.cases.map(c=>c.childPid).concat(result.parent.pid)).size,3);
-for(const c of result.cases) assert.ok(c.childTaskDone&&c.parentCompleted&&c.incompleteExcluded);
+for(const c of result.cases) {
+ assert.ok(c.childTaskDone&&c.parentCompleted&&c.incompleteExcluded);
+ assert.ok(c.expectedLeaf&&c.copiedEntries>10,'latest saved history must be present');
+ assert.equal(c.copiedLeaf,c.expectedLeaf,'clone must reach the exact latest safe parent entry');
+}
 const runtime=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
 assert.ok(runtime.ok);assert.equal(runtime.tools.pi,'0.87.1');
 console.log('native macOS busy clone: real iTerm parent/children; both busy stages PASS');

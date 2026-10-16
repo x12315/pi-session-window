@@ -4,5 +4,6 @@ extensions/session-snapshot.mjs:/tmp/ahsb-push/window/extensions/session-snapsho
 extensions/window-launcher.mjs:/tmp/ahsb-push/window/extensions/window-launcher.mjs
 tests/busy-clone/native-run.mjs:/tmp/ahsb-push/window/tests/busy-clone/native-run.mjs
 tests/busy-clone/probe.ts:/tmp/ahsb-push/window/tests/busy-clone/probe.ts
+tests/busy-clone/verify-snapshot.mjs:/tmp/ahsb-push/window/tests/busy-clone/verify-snapshot.mjs
 tests/busy-clone/xwd-png.mjs:/tmp/ahsb-push/window/tests/busy-clone/xwd-png.mjs
 tests/sandbox/window-common/parent-probe.ts:/tmp/ahsb-push/window/tests/sandbox/window-common/parent-probe.ts

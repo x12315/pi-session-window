@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { shellQuote } from "../../extensions/window-launcher.mjs";
 import { xwdToPng } from "./xwd-png.mjs";
+import { verifyClonedPrefix } from "./verify-snapshot.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const root = realpathSync(mkdtempSync(join(tmpdir(), "pi-busy-native-")));
@@ -73,7 +74,7 @@ try {
 	const prepareRuntime = (dir) => { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, "models.json"), JSON.stringify(models)); writeFileSync(join(dir, "settings.json"), '{"cacheWarming":"off"}'); };
 	prepareRuntime(agentDir); writeFileSync(join(root, "models.json"), JSON.stringify(models));
 	const flags = ["--offline", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files"];
-	exec(pi, [...flags, "--mode", "rpc", "-e", join(repo, "tests/sandbox/window-common/parent-probe.ts")], { env: { ...env, WINDOW_SEED: "1" }, input: "" });
+	exec(pi, [...flags, "--mode", "rpc", "-e", join(repo, "tests/sandbox/window-common/parent-probe.ts")], { env: { ...env, WINDOW_SEED: "1", WINDOW_SNAPSHOT_HISTORY: "1" }, input: "" });
 	const seed = read("seed.json"), probe = join(repo, "tests/busy-clone/probe.ts");
 	const child = [pi, ...flags, "--provider", "window-fixture", "--model", "fixture", "-e", probe].map(shellQuote).join(" ");
 	const marker = `const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(root)}+'/launch-'+process.ppid+'.json',JSON.stringify({pid:process.ppid,inheritedRuntime:process.env.PI_CODING_AGENT_DIR??null,args:process.argv.slice(1)}));`;
@@ -118,6 +119,7 @@ try {
 		const launchMarker = records("launch-").map(read).find((item) => item.args.includes(childStart.file));
 		assert.ok(launchMarker); assert.equal(launchMarker.inheritedRuntime, null);
 		const childBytes = readFileSync(childStart.file, "utf8");
+		const snapshot = verifyClonedPrefix(bytes, childBytes, index === 1 ? "call_busy" : undefined);
 		assert.ok(!childBytes.includes(index === 0 ? "PARENT_STREAMING" : "call_busy"));
 		assert.equal(JSON.parse(childBytes.split("\n")[0]).parentSession, realpathSync(seed.file));
 		send(`child-${index + 1}`, "child task", parentWindow + index + 1);
@@ -126,7 +128,7 @@ try {
 		if (index === 0) releaseStream(); else writeFileSync(join(root, "release-tool"), "release");
 		await wait(() => existsSync(end), "parent completes without cancellation");
 		if (index === 1) assert.equal(read("parent-tool-completed.json").done, true);
-		evidence.push({ job, parentPid: parentStart.pid, childPid: childStart.pid, childFile: childStart.file, childTaskDone: true, parentCompleted: true, incompleteExcluded: true });
+		evidence.push({ job, parentPid: parentStart.pid, childPid: childStart.pid, childFile: childStart.file, ...snapshot, childTaskDone: true, parentCompleted: true, incompleteExcluded: true });
 		console.log(`nativeBusyStage=PASS job=${job}`);
 	}
 	assert.deepEqual(errors, []); assert.equal(childRequests.length, 2); assert.equal(observed.size, 2);

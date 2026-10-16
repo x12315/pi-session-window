@@ -7,10 +7,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { shellQuote } from "../../extensions/window-launcher.mjs";
+import { verifyClonedPrefix } from "./verify-snapshot.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const root = mkdtempSync(join(tmpdir(), "pi-busy-clone-"));
 const socket = join(root, "tmux.sock");
+const tmuxConfig = join(root, "tmux.conf");
+writeFileSync(tmuxConfig, "set -g extended-keys on\nset -g extended-keys-format csi-u\n");
 const find = (name) => {
 	const result = spawnSync("sh", ["-c", `command -v ${name}`], { encoding: "utf8" });
 	assert.equal(result.status, 0, `${name} is required; this test cannot be skipped`);
@@ -27,7 +30,7 @@ env.NO_PROXY = env.no_proxy = "127.0.0.1,localhost";
 env.DISPLAY = ":busy-fixture";
 const read = (name) => JSON.parse(readFileSync(join(root, name), "utf8"));
 const tmux = (...args) => {
-	const result = spawnSync(tmuxExecutable, ["-S", socket, ...args], { env, encoding: "utf8" });
+	const result = spawnSync(tmuxExecutable, ["-S", socket, "-f", tmuxConfig, ...args], { env, encoding: "utf8" });
 	assert.equal(result.status, 0, `tmux ${args.join(" ")}: ${result.stderr}`);
 	return result.stdout;
 };
@@ -80,7 +83,7 @@ try {
 	const models = { providers: { "window-fixture": { api: "openai-completions", apiKey: "fixture", baseUrl: `http://127.0.0.1:${server.address().port}/v1`, models: [{ id: "fixture", name: "Local window fixture", contextWindow: 32000, maxTokens: 512, reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] } } };
 	for (const dir of [agentDir, join(home, ".pi/agent")]) writeFileSync(join(dir, "models.json"), JSON.stringify(models));
 	const flags = ["--offline", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files"];
-	const seeded = spawnSync(pi, [...flags, "--mode", "rpc", "-e", join(repo, "tests/sandbox/window-common/parent-probe.ts")], { env: { ...env, WINDOW_SEED: "1" }, input: "", encoding: "utf8", timeout: 12000 });
+	const seeded = spawnSync(pi, [...flags, "--mode", "rpc", "-e", join(repo, "tests/sandbox/window-common/parent-probe.ts")], { env: { ...env, WINDOW_SEED: "1", WINDOW_SNAPSHOT_HISTORY: "1" }, input: "", encoding: "utf8", timeout: 12000 });
 	assert.equal(seeded.status, 0, seeded.stderr);
 	const seed = read("seed.json");
 	const probe = join(repo, "tests/busy-clone/probe.ts");
@@ -90,7 +93,7 @@ try {
 	for (const name of ["osascript", "x-terminal-emulator"]) writeFileSync(join(bin, name), terminal, { mode: 0o700 });
 	const parentCommand = [pi, ...flags, "--provider", "window-fixture", "--model", "fixture", "-e", join(repo, "extensions/session-window.ts"), "-e", probe, "--session", seed.file].map(shellQuote).join(" ");
 	tmux("new-session", "-d", "-s", "parent", "-x", "96", "-y", "28", `cd ${shellQuote(seed.cwd)} && ${parentCommand}`);
-	await wait(() => pane("parent").includes("BUSY_TEST_READY"), "parent TUI ready");
+	await wait(() => records("parent-start-").length === 1, "parent TUI session_start");
 	const parentStart = read(records("parent-start-")[0]);
 	assert.equal(parentStart.mode, "tui"); assert.equal(parentStart.tty, true);
 	const observedChildren = new Set();
@@ -113,6 +116,8 @@ try {
 		observedChildren.add(child.pid);
 		assert.equal(child.mode, "tui"); assert.equal(child.tty, true); assert.equal(child.agentDir, null);
 		const childFile = readFileSync(child.file, "utf8");
+		const snapshot = verifyClonedPrefix(bytes, childFile, index === 1 ? "call_busy" : undefined);
+		console.log(`CLONE_PREFIX_PASS ${JSON.stringify(snapshot)}`);
 		if (index === 0) assert.ok(!childFile.includes("PARENT_STREAMING"), "unfinished reply must not be cloned");
 		else assert.ok(!childFile.includes("call_busy"), "outstanding tool call must not be cloned");
 		assert.equal(JSON.parse(childFile.split("\n")[0]).parentSession, realpathSync(seed.file));
